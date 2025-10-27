@@ -1,61 +1,169 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
+import { format, parseISO } from 'date-fns';
+import TaskDetailModal from './TaskDetailModal';
 
+const API_BASE = 'http://localhost:5000'; // your backend base URL
+
+function emptyTask() {
+  return { title: '', description: '', dueDate: '' };
+}
 
 export default function App() {
-    const [tasks, setTasks] = useState([]);
-    const [title, setTitle] = useState('');
+  const [tasks, setTasks] = useState([]);
+  const [form, setForm] = useState(emptyTask());
+  const [filter, setFilter] = useState('all');
+  const [detail, setDetail] = useState(null);
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(false);
 
-    const API_BASE = process.env.REACT_APP_API_BASE || '';
-    useEffect(() => {
-        console.log("API Base:", process.env.REACT_APP_API_BASE);
-        fetchTasks();
-        }, []);
+  // Fetch tasks when the filter changes
+  useEffect(() => {
+    fetchTasks();
+  }, [filter]);
 
-
-    async function fetchTasks() {
-        const res = await axios.get(`${API_BASE}/api/tasks`);
-        setTasks(res.data);
+  // Fetch tasks from backend based on filter
+  async function fetchTasks() {
+    try {
+      setLoading(true);
+      const res = await axios.get(`${API_BASE}/api/tasks?filter=${filter}`);
+      setTasks(res.data);
+      setError(null);
+    } catch (err) {
+      console.error(err);
+      setError('Failed to load tasks');
+    } finally {
+      setLoading(false);
     }
+  }
 
-
-    async function add() {
-        if (!title) return;
-        await axios.post(`${API_BASE}/api/tasks`, { title });
-        setTitle('');
-        fetchTasks();
+  // Add new task
+  async function addTask() {
+    try {
+      await axios.post(`${API_BASE}/api/tasks`, form);
+      setForm(emptyTask());
+      fetchTasks();
+    } catch (err) {
+      console.error(err);
+      setError('Failed to add task');
     }
+  }
 
+  // Handle form submit
+  function submit(e) {
+    e.preventDefault();
+    if (!form.title.trim()) return setError('Title is required');
+    addTask();
+  }
 
-    async function toggle(id) {
-        const t = tasks.find(x => x.id === id);
-        await axios.put(`${API_BASE}/api/tasks/${id}`, { completed: !t.completed });
-        fetchTasks();
+  // Update task completion
+  async function toggleComplete(id) {
+    const t = tasks.find(task => task.id === id);
+    if (!t) return;
+    try {
+      await axios.put(`${API_BASE}/api/tasks/${id}`, { completed: !t.completed });
+      fetchTasks();
+    } catch (err) {
+      console.error(err);
+      setError('Failed to update task');
     }
+  }
 
-
-    async function remove(id) {
-        await axios.delete(`${API_BASE}/api/tasks/${id}`);
-        fetchTasks();
+  // Delete task
+  async function removeTask(id) {
+    try {
+      await axios.delete(`${API_BASE}/api/tasks/${id}`);
+      fetchTasks();
+    } catch (err) {
+      console.error(err);
+      setError('Failed to delete task');
     }
+  }
 
+  return (
+    <div className="container">
+      <h1>Task Manager</h1>
 
-    return (
-        <div style={{ maxWidth: 600, margin: 40 }}>
-            <h1>Tasks</h1>
-            <div>
-                <input value={title} onChange={e => setTitle(e.target.value)} placeholder="New task" />
-                <button onClick={add}>Add</button>
-            </div>
-            <ul>
-                {tasks.map(t => (
-                    <li key={t.id}>
-                        <input type="checkbox" checked={t.completed} onChange={() => toggle(t.id)} />
-                        <span style={{ textDecoration: t.completed ? 'line-through' : 'none', marginLeft: 8 }}>{t.title}</span>
-                        <button onClick={() => remove(t.id)} style={{ marginLeft: 12 }}>Delete</button>
-                    </li>
-                ))}
-            </ul>
+      {/* Add Task Form */}
+      <form onSubmit={submit}>
+        <input
+          placeholder="Title"
+          value={form.title}
+          onChange={e => setForm({ ...form, title: e.target.value })}
+          required
+        />
+        <input
+          placeholder="Description"
+          value={form.description}
+          onChange={e => setForm({ ...form, description: e.target.value })}
+        />
+        <input
+          type="date"
+          value={form.dueDate ? form.dueDate.split('T')[0] : ''}
+          onChange={e =>
+            setForm({
+              ...form,
+              dueDate: e.target.value ? new Date(e.target.value).toISOString() : '',
+            })
+          }
+        />
+        <button type="submit">Add</button>
+      </form>
+
+      {/* Filter Buttons */}
+      <div className="filters">
+        {['all', 'today', 'tomorrow', 'overdue', 'completed'].map(f => (
+          <button
+            key={f}
+            className={filter === f ? 'active' : ''}
+            onClick={() => setFilter(f)}
+          >
+            {f.charAt(0).toUpperCase() + f.slice(1)}
+          </button>
+        ))}
+      </div>
+
+      {/* Error + Loading */}
+      {error && <div className="error">{error}</div>}
+      {loading && <div>Loading...</div>}
+
+      {/* Task List */}
+      {!loading && !error && (
+        <div className="list">
+          {tasks.length === 0 ? (
+            <div className="empty">No tasks found</div>
+          ) : (
+            tasks.map(t => (
+              <div key={t.id} className={`task ${t.completed ? 'completed' : ''}`}>
+                <div onClick={() => setDetail(t)}>
+                  <input
+                    type="checkbox"
+                    checked={t.completed}
+                    onChange={() => toggleComplete(t.id)}
+                  />
+                  <span>{t.title}</span>
+                  {t.dueDate && (
+                    <small style={{ marginLeft: '10px' }}>
+                      {format(parseISO(t.dueDate), 'yyyy-MM-dd')}
+                    </small>
+                  )}
+                </div>
+                <button onClick={() => removeTask(t.id)}>Delete</button>
+              </div>
+            ))
+          )}
         </div>
-    );
+      )}
+
+      {/* Task Modal */}
+      {detail && (
+        <TaskDetailModal
+          detail={detail}
+          closeDetail={() => setDetail(null)}
+          toggleComplete={toggleComplete}
+          removeTask={removeTask}
+        />
+      )}
+    </div>
+  );
 }
