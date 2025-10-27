@@ -3,7 +3,7 @@ import axios from 'axios';
 import { format, parseISO } from 'date-fns';
 import TaskDetailModal from './TaskDetailModal';
 
-const API_BASE = 'http://localhost:5000'; // your backend base URL
+  const API_BASE = process.env.REACT_APP_API_BASE || '';
 
 function emptyTask() {
   return { title: '', description: '', dueDate: '' };
