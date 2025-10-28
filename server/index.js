@@ -1,7 +1,9 @@
 const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
+const connectDB = require('./db');
 require('dotenv').config();
+connectDB();
 
 const { all, create, update, remove } = require('./tasks');
 
