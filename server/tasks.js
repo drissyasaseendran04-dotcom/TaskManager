@@ -1,73 +1,62 @@
-const { v4: uuidv4 } = require('uuid');
+const Task = require('./models/Task');
 
-// In-memory task store
-let tasks = [];
+// Create
+async function create(data) {
+  const task = new Task({
+    title: data.title,
+    description: data.description,
+    dueDate: data.dueDate,
+  });
+  return await task.save();
+}
 
-/**
- * Create a new task
- */
-
-
-function all(filter) {
+// Get all (optionally filtered)
+async function all(filter = 'all') {
   const now = new Date();
+  let query = {};
+
   switch (filter) {
     case 'today':
-      return tasks.filter(t => t.dueDate && isToday(parseISO(t.dueDate)));
+      query = {
+        dueDate: {
+          $gte: new Date(now.setHours(0, 0, 0, 0)),
+          $lt: new Date(now.setHours(23, 59, 59, 999)),
+        },
+      };
+      break;
     case 'tomorrow':
-      return tasks.filter(t => t.dueDate && isTomorrow(parseISO(t.dueDate)));
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      query = {
+        dueDate: {
+          $gte: new Date(tomorrow.setHours(0, 0, 0, 0)),
+          $lt: new Date(tomorrow.setHours(23, 59, 59, 999)),
+        },
+      };
+      break;
     case 'overdue':
-      return tasks.filter(t => t.dueDate && isBefore(parseISO(t.dueDate), now) && !t.completed);
+      query = { dueDate: { $lt: new Date() }, completed: false };
+      break;
     case 'completed':
-      return tasks.filter(t => t.completed);
+      query = { completed: true };
+      break;
     default:
-      return tasks;
+      query = {}; // all tasks
   }
+
+  return await Task.find(query).sort({ dueDate: 1 });
 }
 
-function create({ title, description = '' }) {
-  if (!title || typeof title !== 'string') throw new Error('title-required');
-  const task = {
-    id: uuidv4(),
-    title,
-    description,
-    completed: false,
-    createdAt: new Date().toISOString(),
-  };
-  tasks.push(task);
-  return task;
+//  Update (by ID)
+async function update(id, patch) {
+  const updated = await Task.findByIdAndUpdate(id, patch, { new: true });
+  return updated;
 }
 
-/**
- * Get all tasks
- */
-function all() {
-  return tasks;
+// Remove (by ID)
+async function remove(id) {
+  const result = await Task.findByIdAndDelete(id);
+  return result ? true : false;
 }
 
-/**
- * Update a task by ID
- */
-function update(id, patch) {
-  const t = tasks.find(task => task.id === id);
-  if (!t) return null;
-
-  if (patch.title !== undefined) t.title = patch.title;
-  if (patch.description !== undefined) t.description = patch.description;
-  if (patch.completed !== undefined) t.completed = !!patch.completed;
-  if (patch.dueDate !== undefined) t.dueDate = patch.dueDate;
-
-  t.updatedAt = new Date().toISOString();
-  return t;
-}
-
-/**
- * Delete a task by ID
- */
-function remove(id) {
-  const index = tasks.findIndex(task => task.id === id);
-  if (index === -1) return false;
-  tasks.splice(index, 1);
-  return true;
-}
-
-module.exports = { all, create, update, remove };
+module.exports = { create, all, update, remove };

@@ -57,7 +57,7 @@ export default function App() {
   }
 
   // Update task completion
-  async function toggleComplete(id) {
+  async function updateTask(id) {
     const t = tasks.find(task => task.id === id);
     if (!t) return;
     try {
@@ -160,7 +160,7 @@ export default function App() {
         <TaskDetailModal
           detail={detail}
           closeDetail={() => setDetail(null)}
-          toggleComplete={toggleComplete}
+          updateTask={updateTask}
           removeTask={removeTask}
         />
       )}
